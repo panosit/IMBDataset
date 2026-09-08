@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+
+# Generated model artifacts
+*.joblib
+bert_sentiment_model/
+bert_checkpoints/
+
+# Generated plots
+*.png
+
+# Generated results
+results.json
+
+# Test cache
+.pytest_cache/

@@ -8,12 +8,14 @@ Steps:
 2. Clean text (strip HTML tags) & drop duplicates
 3. Encode target (positive=1, negative=0)
 4. Train/test split
-5. TF-IDF vectorize
-6. Train Logistic Regression and Multinomial Naive Bayes
-7. Evaluate & compare models
+5. TF-IDF vectorize (fit on train only)
+6. Select between Logistic Regression and Multinomial Naive Bayes via
+   cross-validation on the training set only
+7. Evaluate the selected model once on the held-out test set
 8. Save the best model + vectorizer
 """
 
+import json
 import re
 from pathlib import Path
 
@@ -22,7 +24,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import MultinomialNB
@@ -52,7 +54,7 @@ def load_data(path: str) -> pd.DataFrame:
 
 def clean_text(text: str) -> str:
     text = HTML_TAG_RE.sub(" ", text)
-    text = re.sub(r"[^a-zA-Z\s]", " ", text)
+    text = re.sub(r"[^a-zA-Z0-9\s']", " ", text)
     text = re.sub(r"\s+", " ", text).strip().lower()
     return text
 
@@ -116,7 +118,23 @@ def evaluate_model(name: str, model, X_test, y_test) -> dict:
     print("\nClassification report:")
     print(classification_report(y_test, y_pred, target_names=["negative", "positive"]))
 
-    return metrics, y_proba
+    return metrics, y_proba, y_pred
+
+
+def plot_confusion_matrix(name: str, y_test, y_pred) -> None:
+    cm = confusion_matrix(y_test, y_pred)
+    plt.figure(figsize=(5, 4))
+    sns.heatmap(
+        cm, annot=True, fmt="d", cmap="Blues",
+        xticklabels=["negative", "positive"], yticklabels=["negative", "positive"],
+    )
+    plt.xlabel("Predicted")
+    plt.ylabel("Actual")
+    plt.title(f"Confusion Matrix - {name}")
+    plt.tight_layout()
+    plt.savefig(BASE_DIR / "confusion_matrix.png")
+    plt.close()
+    print("\nSaved confusion_matrix.png")
 
 
 def plot_roc_curves(results: dict, y_test) -> None:
@@ -150,28 +168,46 @@ def main():
     X_train = vectorizer.fit_transform(X_train_text)
     X_test = vectorizer.transform(X_test_text)
 
-    log_reg = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)
-    log_reg.fit(X_train, y_train)
-    lr_metrics, lr_proba = evaluate_model("Logistic Regression", log_reg, X_test, y_test)
+    # Model selection via cross-validation on the training set only.
+    # The test set is never touched until the final, single evaluation below.
+    candidates = {
+        "Logistic Regression": LogisticRegression(max_iter=1000, random_state=RANDOM_STATE),
+        "Multinomial Naive Bayes": MultinomialNB(),
+    }
 
-    nb = MultinomialNB()
-    nb.fit(X_train, y_train)
-    nb_metrics, nb_proba = evaluate_model("Multinomial Naive Bayes", nb, X_test, y_test)
+    print("\n=== Cross-validated model selection (train set only) ===")
+    cv_scores = {}
+    for name, model in candidates.items():
+        scores = cross_val_score(model, X_train, y_train, cv=5, scoring="roc_auc")
+        cv_scores[name] = scores.mean()
+        print(f"{name}: mean CV ROC-AUC = {scores.mean():.4f} (+/- {scores.std():.4f})")
 
-    plot_roc_curves(
-        {"Logistic Regression": lr_proba, "Multinomial Naive Bayes": nb_proba}, y_test
-    )
+    best_name = max(cv_scores, key=cv_scores.get)
+    print(f"\nSelected model based on CV: {best_name}")
 
-    print("\n=== Model comparison ===")
-    comparison = pd.DataFrame([lr_metrics, nb_metrics]).set_index("model")
-    print(comparison)
+    best_model = candidates[best_name]
+    best_model.fit(X_train, y_train)
+    best_metrics, best_proba, best_pred = evaluate_model(best_name, best_model, X_test, y_test)
 
-    best_name = comparison["roc_auc"].idxmax()
-    best_model = log_reg if best_name == "Logistic Regression" else nb
+    plot_roc_curves({best_name: best_proba}, y_test)
+    plot_confusion_matrix(best_name, y_test, best_pred)
+
     joblib.dump(best_model, BASE_DIR / "best_sentiment_model.joblib")
     joblib.dump(vectorizer, BASE_DIR / "tfidf_vectorizer.joblib")
+    joblib.dump(best_metrics, BASE_DIR / "baseline_metrics.joblib")
+
+    results = {
+        "selected_model": best_name,
+        "cv_scores": cv_scores,
+        "test_metrics": {k: v for k, v in best_metrics.items() if k != "model"},
+    }
+    with open(BASE_DIR / "results.json", "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2)
+
     print(f"\nBest model ('{best_name}') saved to best_sentiment_model.joblib")
     print("Vectorizer saved to tfidf_vectorizer.joblib")
+    print("Metrics saved to baseline_metrics.joblib")
+    print("Results summary saved to results.json")
 
 
 if __name__ == "__main__":

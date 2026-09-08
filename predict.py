@@ -10,25 +10,17 @@ and prints whether the review is Positive or Negative, with probability.
 """
 
 import json
-import re
 import sys
 from pathlib import Path
 
 import joblib
 
+from main import clean_text
+
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / "best_sentiment_model.joblib"
 VECTORIZER_PATH = BASE_DIR / "tfidf_vectorizer.joblib"
 INPUT_JSON = BASE_DIR / "review.json"
-
-HTML_TAG_RE = re.compile(r"<.*?>")
-
-
-def clean_text(text: str) -> str:
-    text = HTML_TAG_RE.sub(" ", text)
-    text = re.sub(r"[^a-zA-Z\s]", " ", text)
-    text = re.sub(r"\s+", " ", text).strip().lower()
-    return text
 
 
 def load_review(path: str) -> str:
@@ -65,9 +57,9 @@ def main():
     print(f'Review: "{review_text}"')
     print("\n=== Result ===")
     if prediction == 1:
-        print(f"Sentiment: POSITIVE (confidence: {probability:.1%})")
+        print(f"Sentiment: POSITIVE (probability: {probability:.1%})")
     else:
-        print(f"Sentiment: NEGATIVE (confidence: {1 - probability:.1%})")
+        print(f"Sentiment: NEGATIVE (probability: {1 - probability:.1%})")
 
 
 if __name__ == "__main__":

@@ -83,16 +83,18 @@ def compute_metrics(eval_pred):
 
 
 def print_baseline_comparison(bert_metrics: dict) -> None:
-    baseline_path = BASE_DIR / "best_sentiment_model.joblib"
-    if not baseline_path.exists():
-        print("\n(No baseline model found - run main.py first to compare against TF-IDF + LogReg.)")
+    baseline_metrics_path = BASE_DIR / "baseline_metrics.joblib"
+    if not baseline_metrics_path.exists():
+        print("\n(No baseline metrics found - run main.py first to compare against TF-IDF + LogReg.)")
         return
 
-    print("\n=== Comparison: DistilBERT vs TF-IDF + Logistic Regression baseline ===")
-    print(f"{'Metric':>10} | {'DistilBERT':>12} | {'Baseline (LogReg)':>18}")
-    baseline_known = {"accuracy": 0.904, "roc_auc": 0.966}
+    baseline_metrics = joblib.load(baseline_metrics_path)
+    baseline_name = baseline_metrics.get("model", "Baseline")
+
+    print(f"\n=== Comparison: DistilBERT vs {baseline_name} baseline ===")
+    print(f"{'Metric':>10} | {'DistilBERT':>12} | {baseline_name[:18]:>18}")
     for metric, value in bert_metrics.items():
-        base_val = baseline_known.get(metric)
+        base_val = baseline_metrics.get(metric)
         base_str = f"{base_val:.4f}" if base_val is not None else "n/a"
         print(f"{metric:>10} | {value:>12.4f} | {base_str:>18}")
 
@@ -103,16 +105,24 @@ def main():
 
     df = load_data(DATA_PATH)
     print(f"Loaded {len(df)} reviews after de-duplication.")
+    print("Splitting into train / validation / test (80% / 8% / 20% of the full set).")
 
-    train_texts, test_texts, train_labels, test_labels = train_test_split(
+    # Held-out test set is split off first and never used during training
+    # or for epoch-level Trainer evaluation - only for the final metrics below.
+    train_val_texts, test_texts, train_val_labels, test_labels = train_test_split(
         df["review"], df["label"], test_size=0.2,
         random_state=RANDOM_STATE, stratify=df["label"]
+    )
+    train_texts, val_texts, train_labels, val_labels = train_test_split(
+        train_val_texts, train_val_labels, test_size=0.1,
+        random_state=RANDOM_STATE, stratify=train_val_labels
     )
 
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME, num_labels=2)
 
     train_dataset = IMDBDataset(train_texts, train_labels, tokenizer, MAX_LENGTH)
+    val_dataset = IMDBDataset(val_texts, val_labels, tokenizer, MAX_LENGTH)
     test_dataset = IMDBDataset(test_texts, test_labels, tokenizer, MAX_LENGTH)
 
     training_args = TrainingArguments(
@@ -132,14 +142,14 @@ def main():
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset=test_dataset,
+        eval_dataset=val_dataset,
         compute_metrics=compute_metrics,
     )
 
     trainer.train()
 
-    print("\n=== Final evaluation on test set ===")
-    metrics = trainer.evaluate()
+    print("\n=== Final evaluation on held-out test set (never seen during training) ===")
+    metrics = trainer.evaluate(eval_dataset=test_dataset)
     bert_metrics = {
         "accuracy": metrics["eval_accuracy"],
         "precision": metrics["eval_precision"],

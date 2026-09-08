@@ -11,19 +11,18 @@ with confidence.
 """
 
 import json
-import re
 import sys
 from pathlib import Path
 
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
+from bert_finetune import HTML_TAG_RE
+
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "bert_sentiment_model"
 INPUT_JSON = BASE_DIR / "review.json"
 MAX_LENGTH = 256
-
-HTML_TAG_RE = re.compile(r"<.*?>")
 
 
 def clean_text(text: str) -> str:
@@ -75,9 +74,9 @@ def main():
     print(f'Review: "{review_text}"')
     print("\n=== Result ===")
     if prediction == 1:
-        print(f"Sentiment: POSITIVE (confidence: {probability:.1%})")
+        print(f"Sentiment: POSITIVE (probability: {probability:.1%})")
     else:
-        print(f"Sentiment: NEGATIVE (confidence: {1 - probability:.1%})")
+        print(f"Sentiment: NEGATIVE (probability: {1 - probability:.1%})")
 
 
 if __name__ == "__main__":

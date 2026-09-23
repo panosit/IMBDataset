@@ -1,115 +1,46 @@
-# IMDB Sentiment Analysis
+# Reproducible IMDB Sentiment Research
 
-Binary text classification (positive/negative) on the IMDB movie reviews
-dataset (`IMDB Dataset.csv`, 50,000 reviews, perfectly balanced 25k/25k,
-418 duplicate rows removed). Includes a classic TF-IDF + linear model
-pipeline and an in-progress transformer fine-tuning comparison.
+This repository is a **doctoral-research framework** for leakage-safe sentiment-classification experiments. It is not a completed empirical thesis: numerical findings must be generated from the versioned protocol and reported with their manifests, uncertainty intervals, and limitations.
 
-## Classic ML pipeline (`main.py`)
+## Research contribution
 
-1. **Load & clean** — drop duplicates, strip HTML tags (`<br />` noise
-   present in ~29,200 rows), strip characters other than letters/digits/
-   apostrophes (preserves contractions like "wasn't" and ratings like
-   "10/10"), lowercase.
-2. **EDA** — sentiment balance, review length distribution by sentiment.
-3. **Train/test split** — stratified 80/20 split. The test set is held
-   out completely until the final evaluation step; it is never used for
-   model selection.
-4. **Vectorize** — TF-IDF, unigrams + bigrams, top 20,000 features,
-   `min_df=5`, fitted on the training split only.
-5. **Model selection** — Logistic Regression and Multinomial Naive Bayes
-   are compared via 5-fold cross-validation (ROC-AUC) on the training
-   set only. The winner is refit on the full training set.
-6. **Final evaluation** — the selected model is evaluated exactly once
-   on the held-out test set.
-7. **Save** — best model (`best_sentiment_model.joblib`), fitted
-   vectorizer (`tfidf_vectorizer.joblib`), test-set metrics
-   (`baseline_metrics.joblib`, `results.json`).
+The project addresses comparative performance **and** reliability: discriminative performance, calibration, robustness, error taxonomy, interpretability, and external validity. The preregistered questions and ethical constraints are in [`docs/RESEARCH_PROTOCOL.md`](docs/RESEARCH_PROTOCOL.md); the formal manuscript draft is in [`docs/thesis/`](docs/thesis/).
 
-### Results
+## Layout
 
-Cross-validated model selection (training set, 5-fold, mean ROC-AUC):
-
-| Model | CV ROC-AUC |
-|---|---|
-| **Logistic Regression** | **0.964** |
-| Multinomial Naive Bayes | 0.946 |
-
-Final held-out test-set performance of the selected model (Logistic
-Regression):
-
-| Metric | Score |
-|---|---|
-| Accuracy | 90.5% |
-| Precision | 89.5% |
-| Recall | 91.8% |
-| F1 | 90.6% |
-| ROC-AUC | 0.966 |
-
-Exact numbers are written to `results.json` on every run of `main.py`.
-
-## Transformer fine-tuning (`bert_finetune.py`) — in progress
-
-Fine-tunes a pretrained `distilbert-base-uncased` checkpoint (Hugging Face
-`transformers` `Trainer`) on the same 50k reviews (raw text, not the
-cleaned text used for TF-IDF — BERT's tokenizer handles punctuation and
-casing natively), for 1 epoch.
-
-- Data is split 80/8/20 into train/validation/test. The validation split
-  is used for epoch-level `Trainer` checkpointing; the test split is
-  evaluated exactly once, after training finishes.
-- Auto-detects GPU via `torch.cuda.is_available()`; falls back to CPU.
-- Prints a comparison against the classic baseline by loading the real
-  metrics `main.py` saved to `baseline_metrics.joblib` (no hardcoded
-  numbers).
-- **Status: script is complete and runnable, but has not yet been run to
-  completion.** Full 50k/1-epoch training on CPU is expected to take on
-  the order of hours.
-
-## Usage
-
-Train the classic baseline:
-
-```
-python main.py
+```text
+src/imdb_sentiment/  reusable data, metrics, and experiment code
+tests/               automated unit and regression tests
+configs/             versioned experiment specifications
+scripts/             reproducible command-line entry points
+data/raw/            source data (immutable after checksum verification)
+data/processed/      generated data only (ignored)
+outputs/             generated run artifacts only (ignored)
+docs/                protocol, reproducibility guide, and thesis draft
 ```
 
-Predict with the classic model — edit `review.json` with a review, then:
+## Protocol safeguards
 
-```
-python predict.py
-```
+- Validates schema and removes exact duplicate rows before splitting.
+- Uses a deterministic, stratified 80/20 hold-out partition and saves split row IDs.
+- Fits TF–IDF **inside** every CV fold through an sklearn `Pipeline`.
+- Uses nested cross-validation for selection and reports the final held-out evaluation separately.
+- Emits ROC-AUC, PR-AUC, F1, balanced accuracy, MCC, Brier score, calibration bins, 95% stratified-bootstrap intervals, timing, environment, dataset SHA-256, and Git commit.
+- Treats unexecuted configurations and document placeholders as non-results.
 
-Fine-tune DistilBERT (long-running on CPU):
+## Quick start
 
-```
-python bert_finetune.py
-```
-
-Predict with the fine-tuned transformer once trained:
-
-```
-python bert_predict.py
-```
-
-Run the unit tests:
-
-```
-python -m pytest test_main.py -v
+```bash
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -e '.[dev]'
+python scripts/verify_dataset.py
+python scripts/run_experiment.py --config configs/baseline.json
+python -m pytest
 ```
 
-## Files
+The default experiment can take substantial time because it performs nested cross-validation over three model families. Start with a reduced copy of `configs/baseline.json` for smoke testing; never use a smoke-test result in the thesis.
 
-- `main.py` / `predict.py` — TF-IDF + Logistic Regression pipeline
-- `test_main.py` — unit tests for `main.py` (`clean_text`, `load_data`,
-  `preprocess`, `evaluate_model`)
-- `bert_finetune.py` / `bert_predict.py` — DistilBERT fine-tuning pipeline
-- `review.json` — input for both `predict.py` and `bert_predict.py`
-- `IMDB Dataset.csv` — dataset
-- `best_sentiment_model.joblib`, `tfidf_vectorizer.joblib`,
-  `baseline_metrics.joblib` — classic ML artifacts
-- `results.json` — human-readable summary of the latest `main.py` run
-  (CV scores + final test metrics)
-- `bert_sentiment_model/` — fine-tuned DistilBERT weights + tokenizer
-  (created after running `bert_finetune.py`)
-- `eda_*.png`, `roc_curves.png`, `confusion_matrix.png` — generated plots
+## Thesis readiness checklist
+
+Before submission, complete the pending empirical work: lock hypotheses, execute all planned seeds/configurations, conduct paired statistical comparisons, run robustness and external-validation experiments, perform two-annotator error analysis, verify every literature citation, and replace all manuscript placeholders with generated tables/figures. See [`docs/RESEARCH_PROTOCOL.md`](docs/RESEARCH_PROTOCOL.md) and [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md).

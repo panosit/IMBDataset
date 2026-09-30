@@ -20,7 +20,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from bert_finetune import HTML_TAG_RE
 
 BASE_DIR = Path(__file__).resolve().parent
-MODEL_DIR = BASE_DIR / "bert_sentiment_model"
+MODEL_DIR = BASE_DIR / "outputs/transformer/bert_sentiment_model"
 INPUT_JSON = BASE_DIR / "review.json"
 MAX_LENGTH = 256
 

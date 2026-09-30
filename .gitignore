@@ -1,16 +1,15 @@
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
 
-# Generated model artifacts
-*.joblib
+# Generated experiment artifacts (rebuild with scripts/run_experiment.py)
+outputs/*
+!outputs/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Transformer checkpoints
 bert_sentiment_model/
 bert_checkpoints/
-
-# Generated plots
-*.png
-
-# Generated results
-results.json
-
-# Test cache
-.pytest_cache/

@@ -9,7 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from main import clean_text, load_data, preprocess, evaluate_model
+from imdb_sentiment.data import clean_text, load_data, preprocess
+from imdb_sentiment.metrics import compute_metrics
 
 
 class DummyModel:
@@ -98,17 +99,20 @@ class TestEvaluateModel:
         model = DummyModel(preds=[1, 0, 1, 0], probas=[[0.1, 0.9], [0.8, 0.2], [0.3, 0.7], [0.9, 0.1]])
         y_test = pd.Series([1, 0, 1, 0])
 
-        metrics, y_proba, y_pred = evaluate_model("Dummy", model, X_test=None, y_test=y_test)
+        y_pred = model.predict(None)
+        y_proba = model.predict_proba(None)[:, 1]
+        metrics = compute_metrics(y_test, y_pred, y_proba)
 
-        assert metrics["model"] == "Dummy"
-        for key in ("accuracy", "precision", "recall", "f1", "roc_auc"):
+        for key in ("accuracy", "precision", "recall", "f1", "roc_auc", "pr_auc", "mcc", "brier"):
             assert key in metrics
 
     def test_perfect_predictions_score_1(self):
         model = DummyModel(preds=[1, 0, 1, 0], probas=[[0.0, 1.0], [1.0, 0.0], [0.0, 1.0], [1.0, 0.0]])
         y_test = pd.Series([1, 0, 1, 0])
 
-        metrics, _, _ = evaluate_model("Dummy", model, X_test=None, y_test=y_test)
+        y_pred = model.predict(None)
+        y_proba = model.predict_proba(None)[:, 1]
+        metrics = compute_metrics(y_test, y_pred, y_proba)
 
         assert metrics["accuracy"] == 1.0
         assert metrics["roc_auc"] == 1.0
@@ -118,7 +122,7 @@ class TestEvaluateModel:
         model = DummyModel(preds=preds, probas=[[0.1, 0.9], [0.8, 0.2], [0.3, 0.7], [0.9, 0.1]])
         y_test = pd.Series([1, 1, 0, 0])
 
-        _, _, y_pred = evaluate_model("Dummy", model, X_test=None, y_test=y_test)
+        y_pred = model.predict(None)
 
         assert list(y_pred) == preds
 

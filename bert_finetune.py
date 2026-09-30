@@ -34,9 +34,9 @@ from transformers import (
 )
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_PATH = BASE_DIR / "IMDB Dataset.csv"
+DATA_PATH = BASE_DIR / "data/raw/imdb_dataset.csv"
 MODEL_NAME = "distilbert-base-uncased"
-MODEL_OUT_DIR = BASE_DIR / "bert_sentiment_model"
+MODEL_OUT_DIR = BASE_DIR / "outputs/transformer/bert_sentiment_model"
 RANDOM_STATE = 42
 MAX_LENGTH = 256
 NUM_EPOCHS = 1
@@ -83,14 +83,15 @@ def compute_metrics(eval_pred):
 
 
 def print_baseline_comparison(bert_metrics: dict) -> None:
-    baseline_metrics_path = BASE_DIR / "baseline_metrics.joblib"
-    if not baseline_metrics_path.exists():
-        print("\n(No baseline metrics found - run main.py first to compare against TF-IDF + LogReg.)")
+    """Compare against the selected baseline metrics, when generated."""
+    results_path = BASE_DIR / "outputs/baseline/results.json"
+    if not results_path.exists():
+        print("\n(No baseline results found - run scripts/run_experiment.py first.)")
         return
-
-    baseline_metrics = joblib.load(baseline_metrics_path)
-    baseline_name = baseline_metrics.get("model", "Baseline")
-
+    import json
+    results = json.loads(results_path.read_text(encoding="utf-8"))
+    baseline_name = results["selected_model"]
+    baseline_metrics = results["models"][baseline_name]["test_metrics"]
     print(f"\n=== Comparison: DistilBERT vs {baseline_name} baseline ===")
     print(f"{'Metric':>10} | {'DistilBERT':>12} | {baseline_name[:18]:>18}")
     for metric, value in bert_metrics.items():
@@ -126,7 +127,7 @@ def main():
     test_dataset = IMDBDataset(test_texts, test_labels, tokenizer, MAX_LENGTH)
 
     training_args = TrainingArguments(
-        output_dir=str(BASE_DIR / "bert_checkpoints"),
+        output_dir=str(BASE_DIR / "outputs/transformer/bert_checkpoints"),
         num_train_epochs=NUM_EPOCHS,
         per_device_train_batch_size=BATCH_SIZE,
         per_device_eval_batch_size=BATCH_SIZE,

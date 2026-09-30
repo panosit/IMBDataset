@@ -44,3 +44,19 @@ The default experiment can take substantial time because it performs nested cros
 ## Thesis readiness checklist
 
 Before submission, complete the pending empirical work: lock hypotheses, execute all planned seeds/configurations, conduct paired statistical comparisons, run robustness and external-validation experiments, perform two-annotator error analysis, verify every literature citation, and replace all manuscript placeholders with generated tables/figures. See [`docs/RESEARCH_PROTOCOL.md`](docs/RESEARCH_PROTOCOL.md) and [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md).
+
+## Use a completed baseline run
+
+After `scripts/run_experiment.py` finishes, the selected fitted sklearn pipeline
+and its `results.json` live in `outputs/baseline/`. The downstream commands load
+those artifacts directly; they do not expect the removed root-level
+`best_sentiment_model.joblib` or `tfidf_vectorizer.joblib` files.
+
+```bash
+python predict.py
+python run_analysis.py
+```
+
+`run_analysis.py` uses the saved split row IDs and writes
+`outputs/baseline/analysis_results.json`. Both commands exit with a clear error
+until the baseline experiment has produced its artifacts.

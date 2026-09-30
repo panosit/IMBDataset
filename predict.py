@@ -1,65 +1,50 @@
-"""
-IMDB Sentiment Predictor
-==========================
-Fill in review.json with a movie review, then run:
+"""Predict sentiment using the selected pipeline from ``outputs/baseline``.
 
-    python predict.py
-
-It loads the trained model + TF-IDF vectorizer produced by main.py
-and prints whether the review is Positive or Negative, with probability.
+Fill in ``review.json`` and run ``python predict.py`` after executing the
+baseline experiment. The selected artifact is a complete sklearn pipeline, so
+this script intentionally does not load a separate TF-IDF vectorizer.
 """
+from __future__ import annotations
 
 import json
 import sys
 from pathlib import Path
 
-import joblib
-
-from main import clean_text
-
 BASE_DIR = Path(__file__).resolve().parent
-MODEL_PATH = BASE_DIR / "best_sentiment_model.joblib"
-VECTORIZER_PATH = BASE_DIR / "tfidf_vectorizer.joblib"
+sys.path.insert(0, str(BASE_DIR / "src"))
+
+from imdb_sentiment.artifacts import BaselineArtifactError, load_selected_baseline
+from imdb_sentiment.data import clean_text
+
+BASELINE_OUTPUT_DIR = BASE_DIR / "outputs/baseline"
 INPUT_JSON = BASE_DIR / "review.json"
 
 
-def load_review(path: str) -> str:
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    if "review" not in data or not data["review"].strip():
-        raise ValueError(f"'{path}' must contain a non-empty 'review' field.")
-
+def load_review(path: str | Path) -> str:
+    with Path(path).open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict) or not isinstance(data.get("review"), str) or not data["review"].strip():
+        raise ValueError(f"'{path}' must contain a non-empty string 'review' field.")
     return data["review"]
 
 
-def main():
+def main() -> None:
     try:
-        model = joblib.load(MODEL_PATH)
-        vectorizer = joblib.load(VECTORIZER_PATH)
-    except FileNotFoundError:
-        print("Model artifacts not found. Run 'python main.py' first to train and save the model.")
-        sys.exit(1)
-
-    try:
+        model_name, model, _ = load_selected_baseline(BASELINE_OUTPUT_DIR)
         review_text = load_review(INPUT_JSON)
-    except (FileNotFoundError, ValueError) as e:
-        print(f"Error: {e}")
+    except (BaselineArtifactError, FileNotFoundError, ValueError, json.JSONDecodeError) as error:
+        print(f"Error: {error}")
         sys.exit(1)
 
     cleaned = clean_text(review_text)
-    X = vectorizer.transform([cleaned])
-
-    prediction = model.predict(X)[0]
-    probability = model.predict_proba(X)[0][1]
-
+    prediction = int(model.predict([cleaned])[0])
+    probability = float(model.predict_proba([cleaned])[0][1])
+    label = "POSITIVE" if prediction else "NEGATIVE"
+    confidence = probability if prediction else 1 - probability
     print(f"\nInput: {INPUT_JSON}")
+    print(f"Model selected by nested CV: {model_name}")
     print(f'Review: "{review_text}"')
-    print("\n=== Result ===")
-    if prediction == 1:
-        print(f"Sentiment: POSITIVE (probability: {probability:.1%})")
-    else:
-        print(f"Sentiment: NEGATIVE (probability: {1 - probability:.1%})")
+    print(f"\nSentiment: {label} (confidence: {confidence:.1%})")
 
 
 if __name__ == "__main__":
